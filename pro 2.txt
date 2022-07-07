@@ -1,0 +1,87 @@
+CREATE DEFINER = 'root'@'localhost' PROCEDURE `proyeccion`(
+        IN `Monto_Solicitado` DECIMAL,
+        IN `Plazo` INTEGER,
+        IN `Fecha` DATETIME,
+        IN `Tasa_Valor` DECIMAL
+    )
+    NOT DETERMINISTIC
+    CONTAINS SQL
+    SQL SECURITY DEFINER
+    COMMENT ''
+BEGIN	
+	DECLARE Capital_Vivo DECIMAL DEFAULT 0;   
+    DECLARE Tasa FLOAT;
+--    DECLARE Tasa_Valor DECIMAL DEFAULT 0;
+    DECLARE Monto_Cuota DECIMAL DEFAULT 0;
+    DECLARE Interes DECIMAL DEFAULT 0;
+    DECLARE Capital DECIMAL DEFAULT 0;
+    DECLARE Amortizacion DECIMAL DEFAULT 0;
+    DECLARE Cuota INTEGER DEFAULT 1;
+    DECLARE IVA DECIMAL DEFAULT 0;
+    DECLARE Total_Cuota DECIMAL DEFAULT 0;
+    DECLARE Fecha_Vencimiento DATETIME;
+
+    CREATE TEMPORARY TABLE Proyeccion_cuota(
+    	cuota INT
+        , fecha_vencimiento DATETIME
+        , monto_cuota DECIMAL
+        , interes DECIMAL
+        , capital DECIMAL
+        , Capital_Vivo DECIMAL
+        , Amortizacion DECIMAL
+        , IVA DECIMAL
+        , Total_Cuota DECIMAL);
+     
+--	SET Tasa_Valor = 26 ;
+    SET Tasa = ROUND(((Tasa_Valor / 12) /100),7);
+    SET Monto_Cuota = ROUND((Monto_Solicitado * (Tasa *(POWER((1 + Tasa), Plazo)))) / ((POWER((1 + Tasa), Plazo)) -1),0);
+    SET Fecha_Vencimiento = DATE_ADD(LAST_DAY(Fecha), INTERVAL 1 MONTH);
+    SET Capital_Vivo = Monto_Solicitado;
+    
+    WHILE (Cuota <= Plazo) DO
+    
+        SET Interes = ROUND(((Capital_Vivo * Tasa_Valor * 30) / 36000),0);
+        SET Capital = Monto_Cuota - Interes;
+--        SET IVA = ROUND(((Interes * 10)/ 100),0);
+		SET IVA = 0;
+        SET Capital_Vivo = Capital_Vivo - Capital;
+        SET Amortizacion = Amortizacion + Capital;
+        SET Total_Cuota = Capital + Interes + IVA;
+        
+		INSERT INTO Proyeccion_cuota(
+            cuota 
+                , fecha_vencimiento 
+                , monto_cuota 
+                , interes 
+                , capital 
+                , Capital_Vivo 
+                , Amortizacion 
+                , IVA 
+                , Total_Cuota )
+		SELECT
+        	Cuota 
+            	, Fecha_Vencimiento 
+                , Monto_Cuota
+                , Interes
+                , Capital
+                , Capital_Vivo
+                , CASE  
+					 WHEN Cuota = Plazo THEN Amortizacion + Capital_Vivo
+                     ELSE Amortizacion
+                  END
+                , IVA
+                , Total_Cuota;
+                
+		SET Fecha_Vencimiento = DATE_ADD(Fecha_Vencimiento, INTERVAL 1 MONTH);
+        SET Cuota = Cuota + 1;
+        
+    END WHILE;
+    
+	SELECT
+		a.*
+	FROM Proyeccion_cuota a;
+
+
+
+    
+END;

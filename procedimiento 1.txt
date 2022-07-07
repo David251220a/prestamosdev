@@ -1,0 +1,41 @@
+CREATE DEFINER = 'root'@'localhost' PROCEDURE `prestamos_persona`(
+        IN `persona_id` INTEGER
+    )
+    NOT DETERMINISTIC
+    CONTAINS SQL
+    SQL SECURITY DEFINER
+    COMMENT ''
+BEGIN
+    
+	SELECT
+    	c.`documento`
+        	, CONCAT(c.`nombre`,' ' ,  c.`apellido`) AS persona
+            , CONCAT(a.`anio`, d.`alias`, LPAD(a.`numero_expediente`, 6, '0')) AS numero_expediente
+            , b.`cuota` 
+            , b.`capital` - b.`cobrado_capital` as capital
+            , b.`interes` - b.`cobrado_interes` as interes
+            , (b.`monto_cuota` - (b.`cobrado_capital` + b.`cobrado_interes`)) as monto_cuota
+            , b.`fecha_vencimiento`
+            , `atraso`(b.`fecha_vencimiento`) AS atraso
+			, CASE
+            	WHEN `atraso`(b.`fecha_vencimiento`) >= 1 THEN ROUND((((b.`monto_cuota` - (b.`cobrado_capital` + b.`cobrado_interes`)) * `atraso`(b.`fecha_vencimiento`)) /100),0)
+                ELSE 0
+              END AS multa
+            , b.`pagado`
+			, b.`prestamo_id`
+            , b.id
+  	FROM prestamos a
+    INNER JOIN `prestamo_detalles` b
+    	ON (b.`prestamo_id` = a.id)
+	INNER JOIN personas c
+    	ON (c.id = a.`persona_id`)
+	INNER JOIN `productos` d
+    	ON (d.`id` = a.`producto_id`)
+	WHERE (c.`documento` = persona_id)
+    	AND (a.`estado` = 'A')
+        AND ((b.`pagado` = 0) 
+            OR (`atraso`(b.`fecha_vencimiento`) >= 1))
+    ORDER BY b.`cuota`
+        , b.`fecha_vencimiento` ;
+	
+END;
